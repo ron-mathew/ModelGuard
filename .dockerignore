@@ -4,9 +4,9 @@ venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-mlruns/
-artifacts/
 reports/
-data/reference/
 data/simulated/
 dataset/
+
+# mlruns/ and artifacts/ are intentionally included for baked-model deployment
+# (Dockerfile.render COPYs them to embed the trained champion into the image)
