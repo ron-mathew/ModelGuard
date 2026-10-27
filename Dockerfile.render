@@ -1,22 +1,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# ModelGuard — single-container Render deployment
+# ModelGuard — single-process Render deployment (dashboard only)
 #
-# Runs three processes under supervisord:
-#   1. MLflow tracking server  (localhost:5001, internal only)
-#   2. Flask prediction API    (localhost:5000, internal only)
-#   3. Streamlit dashboard     (0.0.0.0:8501,  public — Render routes here)
-#
-# The mlruns/ directory (including mlflow.db and model artifacts) is baked
-# into the image so no training step is needed at startup.
+# Runs Streamlit directly as PID 1 — no supervisord.
+# MLflow is accessed via SQLite file (no HTTP server needed).
+# Port 8501 is the only exposed port.
 # ─────────────────────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
 LABEL maintainer="ModelGuard"
-LABEL description="Drift-Aware MLOps Pipeline — Render single-container deployment"
+LABEL description="Drift-Aware MLOps Pipeline — Render dashboard deployment"
 
-# System deps: curl for health checks, supervisor for process management
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl supervisor \
+    && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -24,43 +19,35 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src \
-    API_HOST=0.0.0.0 \
-    API_PORT=5000 \
     MLFLOW_TRACKING_URI=sqlite:////app/mlruns/mlflow.db \
     MLFLOW_ARTIFACT_ROOT=/app/mlruns/artifacts \
-    MODEL_GUARD_API_URL=http://localhost:5000
+    MODEL_GUARD_API_URL=http://localhost:5000 \
+    LOG_LEVEL=INFO
 
-# Install Python dependencies first (better layer caching)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source
 COPY src/ ./src/
 COPY data/ ./data/
 COPY scripts/ ./scripts/
 COPY dashboard/ ./dashboard/
-
-# Bake in the trained model registry and artifacts
-# (mlruns/mlflow.db holds the champion alias; mlruns/artifacts holds model files)
 COPY mlruns/ ./mlruns/
 COPY artifacts/ ./artifacts/
 
-# Copy supervisor config
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Create directories that may not exist in the repo
 RUN mkdir -p \
     /app/reports/drift \
     /app/reports/monitoring \
     /app/data/simulated \
-    /app/data/reference \
-    /var/log/supervisor
+    /app/data/reference
 
-# Render routes external traffic to this port
 EXPOSE 8501
 
-# Health check against the Streamlit health endpoint
-HEALTHCHECK --interval=30s --timeout=15s --start-period=90s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["streamlit", "run", "/app/dashboard/app.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.headless=true", \
+     "--server.enableCORS=false", \
+     "--server.enableXsrfProtection=false"]
