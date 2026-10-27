@@ -27,9 +27,9 @@ env/
 Thumbs.db
 
 # MLflow
-mlruns/mlflow.db
+# mlruns/mlflow.db   — included for baked-model deployment
 # Keep mlruns/ structure but ignore large artifacts
-mlruns/artifacts/
+# mlruns/artifacts/  — included for baked-model deployment
 
 # Model binaries (tracked via MLflow, not git)
 artifacts/*.pkl
