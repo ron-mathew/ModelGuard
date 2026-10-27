@@ -6,7 +6,7 @@ services:
     port: 8501
     envVars:
       - key: MLFLOW_TRACKING_URI
-        value: http://localhost:5001
+        value: sqlite:////app/mlruns/mlflow.db
       - key: MLFLOW_ARTIFACT_ROOT
         value: /app/mlruns/artifacts
       - key: MODEL_GUARD_API_URL
