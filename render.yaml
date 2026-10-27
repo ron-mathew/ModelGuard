@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: modelguard
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    port: 8501
+    envVars:
+      - key: MLFLOW_TRACKING_URI
+        value: http://localhost:5001
+      - key: MLFLOW_ARTIFACT_ROOT
+        value: /app/mlruns/artifacts
+      - key: MODEL_GUARD_API_URL
+        value: http://localhost:5000
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: 5000
+      - key: LOG_LEVEL
+        value: INFO
