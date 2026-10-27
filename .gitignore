@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# MLflow
+mlruns/mlflow.db
+# Keep mlruns/ structure but ignore large artifacts
+mlruns/artifacts/
+
+# Model binaries (tracked via MLflow, not git)
+artifacts/*.pkl
+artifacts/*.joblib
+
+# Generated reports
+reports/drift/*.html
+reports/monitoring/*.jsonl
+
+# Simulated data (reproducible via scripts)
+data/simulated/
+
+# Test coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Docker
+*.tar

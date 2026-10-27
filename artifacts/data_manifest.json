@@ -1,0 +1,37 @@
+{
+  "source_file": "C:\\Users\\RON MATHEW\\Desktop\\sem7\\MLOpsLab\\ModelGaurd\\data\\raw\\bank-full.csv",
+  "fingerprint": "7ced3ff9c30ec57c3644572b59f5e4214dc550caf95f332eb812cf53c5b42077",
+  "n_rows": 45211,
+  "n_columns": 17,
+  "target_column": "y",
+  "excluded_features": [
+    "duration"
+  ],
+  "feature_columns": [
+    "age",
+    "balance",
+    "day",
+    "campaign",
+    "pdays",
+    "previous",
+    "job",
+    "marital",
+    "education",
+    "default",
+    "housing",
+    "loan",
+    "contact",
+    "month",
+    "poutcome"
+  ],
+  "target_distribution": {
+    "no": 39922,
+    "yes": 5289
+  },
+  "split_sizes": {
+    "train": 31647,
+    "val": 6782,
+    "test": 6782
+  },
+  "random_seed": 42
+}

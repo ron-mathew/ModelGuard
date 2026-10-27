@@ -1,0 +1,136 @@
+services:
+  # -------------------------------------------------------------------------
+  # MLflow Tracking Server
+  # -------------------------------------------------------------------------
+  mlflow:
+    image: python:3.11-slim
+    container_name: modelguard-mlflow
+    working_dir: /app
+    # Use exec-form command so every MLflow option is passed to the server.
+    # The previous folded shell command started MLflow with defaults (127.0.0.1:5000),
+    # while Compose probed localhost:5001.
+    command:
+      - bash
+      - -ec
+      - |
+        apt-get update -qq
+        apt-get install -y -qq --no-install-recommends curl
+        pip install mlflow==3.16.0 --quiet
+        exec mlflow server \
+          --backend-store-uri sqlite:////app/mlruns/mlflow.db \
+          --default-artifact-root /app/mlruns/artifacts \
+          --host 0.0.0.0 \
+          --port 5001 \
+          --allowed-hosts mlflow:5001,modelguard-mlflow:5001,localhost:5001,127.0.0.1:5001
+    volumes:
+      - mlruns_data:/app/mlruns
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # Run explicitly once to populate the shared registry before starting API.
+  trainer:
+    profiles: ["train"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["python", "-m", "modelguard.train", "--model", "both"]
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5001
+      - MLFLOW_ARTIFACT_ROOT=/app/mlruns/artifacts
+    volumes:
+      - mlruns_data:/app/mlruns
+      - artifacts_data:/app/artifacts
+      - reference_data:/app/data/reference
+      - simulated_data:/app/data/simulated
+      - reports_data:/app/reports
+    depends_on:
+      mlflow:
+        condition: service_healthy
+
+  # -------------------------------------------------------------------------
+  # Prediction API
+  # -------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modelguard-api
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5001
+      - MLFLOW_ARTIFACT_ROOT=/app/mlruns/artifacts
+      - API_HOST=0.0.0.0
+      - API_PORT=5000
+      - LOG_LEVEL=INFO
+    volumes:
+      - mlruns_data:/app/mlruns
+      - artifacts_data:/app/artifacts
+      - reference_data:/app/data/reference
+      - simulated_data:/app/data/simulated
+      - reports_data:/app/reports
+    ports:
+      - "5000:5000"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # Streamlit Dashboard
+  # -------------------------------------------------------------------------
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: modelguard-dashboard
+    command: >
+      streamlit run /app/dashboard/app.py
+      --server.port=8501
+      --server.address=0.0.0.0
+      --server.headless=true
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5001
+      - MLFLOW_ARTIFACT_ROOT=/app/mlruns/artifacts
+      - MODEL_GUARD_API_URL=http://api:5000
+      - LOG_LEVEL=INFO
+    volumes:
+      - mlruns_data:/app/mlruns
+      - artifacts_data:/app/artifacts
+      - reports_data:/app/reports
+    ports:
+      - "8501:8501"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mlruns_data:
+    driver: local
+  artifacts_data:
+    driver: local
+  reports_data:
+    driver: local
+  reference_data:
+    driver: local
+  simulated_data:
+    driver: local

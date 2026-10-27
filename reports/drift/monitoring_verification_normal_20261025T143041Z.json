@@ -1,0 +1,13 @@
+{
+  "engine": "evidently",
+  "dataset_drift": false,
+  "drifted_features": [],
+  "feature_drift_scores": {},
+  "n_drifted": 0,
+  "n_features": 15,
+  "drift_fraction": 0.0,
+  "timestamp": "2026-10-25T14:30:43.709335+00:00",
+  "n_current_samples": 1200,
+  "n_reference_samples": 31647,
+  "threshold_used": 0.5
+}

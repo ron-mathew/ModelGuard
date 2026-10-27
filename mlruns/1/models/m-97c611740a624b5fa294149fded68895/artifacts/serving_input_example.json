@@ -1,0 +1,40 @@
+{
+  "dataframe_split": {
+    "columns": [
+      "age",
+      "balance",
+      "day",
+      "campaign",
+      "pdays",
+      "previous",
+      "job",
+      "marital",
+      "education",
+      "default",
+      "housing",
+      "loan",
+      "contact",
+      "month",
+      "poutcome"
+    ],
+    "data": [
+      [
+        45,
+        -36,
+        28,
+        4,
+        -1,
+        0,
+        "services",
+        "married",
+        "secondary",
+        "no",
+        "yes",
+        "yes",
+        "unknown",
+        "may",
+        "unknown"
+      ]
+    ]
+  }
+}

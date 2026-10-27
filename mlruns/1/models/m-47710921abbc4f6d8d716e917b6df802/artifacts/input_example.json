@@ -1,0 +1,1 @@
+{"columns": ["age", "balance", "day", "campaign", "pdays", "previous", "job", "marital", "education", "default", "housing", "loan", "contact", "month", "poutcome"], "data": [[37, 676, 5, 2, -1, 0, "self-employed", "single", "tertiary", "no", "no", "no", "cellular", "aug", "unknown"]]}

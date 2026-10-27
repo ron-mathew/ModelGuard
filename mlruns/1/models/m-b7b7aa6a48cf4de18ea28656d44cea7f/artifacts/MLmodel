@@ -1,0 +1,44 @@
+artifact_path: file:C:/Users/RON MATHEW/Desktop/sem7/MLOpsLab/ModelGaurd/mlruns/1/models/m-b7b7aa6a48cf4de18ea28656d44cea7f/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.13.5
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.7.2
+    skops_trusted_types: null
+is_signature_from_type_hint: false
+mlflow_version: 3.16.0
+model_id: m-b7b7aa6a48cf4de18ea28656d44cea7f
+model_size_bytes: 4214933
+model_uuid: m-b7b7aa6a48cf4de18ea28656d44cea7f
+prompts: null
+run_id: 4fb9c8047f9c49929710ba11a7f70daa
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "long", "name": "age", "required": true}, {"type": "long", "name":
+    "balance", "required": true}, {"type": "long", "name": "day", "required": true},
+    {"type": "long", "name": "campaign", "required": true}, {"type": "long", "name":
+    "pdays", "required": true}, {"type": "long", "name": "previous", "required": true},
+    {"type": "string", "name": "job", "required": true}, {"type": "string", "name":
+    "marital", "required": true}, {"type": "string", "name": "education", "required":
+    true}, {"type": "string", "name": "default", "required": true}, {"type": "string",
+    "name": "housing", "required": true}, {"type": "string", "name": "loan", "required":
+    true}, {"type": "string", "name": "contact", "required": true}, {"type": "string",
+    "name": "month", "required": true}, {"type": "string", "name": "poutcome", "required":
+    true}]'
+  outputs: '[{"type": "long", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-10-25 13:19:44.616275'

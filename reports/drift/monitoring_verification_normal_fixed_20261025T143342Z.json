@@ -1,0 +1,29 @@
+{
+  "engine": "evidently",
+  "dataset_drift": false,
+  "drifted_features": [],
+  "feature_drift_scores": {
+    "age": 0.03933269904688187,
+    "balance": 0.036518916657660216,
+    "campaign": 0.05407201290515904,
+    "day": 0.05613543491477484,
+    "pdays": 0.026935945028876238,
+    "previous": 0.043345641862986256,
+    "contact": 0.011731656961674124,
+    "default": 0.009023148773725344,
+    "education": 0.020342937573049395,
+    "housing": 0.008860981197285386,
+    "job": 0.029387086705194698,
+    "loan": 0.027913427409103346,
+    "marital": 0.009808694920359374,
+    "month": 0.030109102681594318,
+    "poutcome": 0.009252030866280448
+  },
+  "n_drifted": 0,
+  "n_features": 15,
+  "drift_fraction": 0.0,
+  "timestamp": "2026-10-25T14:33:44.715332+00:00",
+  "n_current_samples": 1200,
+  "n_reference_samples": 31647,
+  "threshold_used": 0.5
+}
