@@ -124,9 +124,16 @@ class TestRetrainingEngine:
         monkeypatch.setattr(retrain_module, "RETRAIN_LOG_FILE", tmp_path / "retrain.jsonl")
         monkeypatch.setattr(mon_module, "PROCESSED_BATCHES_FILE", tmp_path / "processed.json")
 
-        # Patch registry functions
+        # Patch registry functions.
+        # retrain.py calls reg.load_champion_versioned (not reg.load_champion),
+        # so that is the symbol that must be patched to avoid a real MLflow call.
+        fitted_pipeline = _make_fitted_pipeline()
+        monkeypatch.setattr(
+            "modelguard.retrain.reg.load_champion_versioned",
+            MagicMock(return_value=(fitted_pipeline, "1")),
+        )
         monkeypatch.setattr("modelguard.retrain.reg.load_champion", MagicMock(
-            return_value=_make_fitted_pipeline()
+            return_value=fitted_pipeline
         ))
         monkeypatch.setattr("modelguard.retrain.reg.get_champion_version", MagicMock(return_value="1"))
         monkeypatch.setattr("modelguard.retrain.reg.register_model", MagicMock(return_value="2"))
