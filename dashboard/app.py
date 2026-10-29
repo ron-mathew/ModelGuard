@@ -40,10 +40,16 @@ from runtime import (  # noqa: E402
     registry_snapshot as apply_registry_mode,
     service_snapshot as collect_service_snapshot,
 )
+from results import (  # noqa: E402
+    empty_state_message,
+    load_results_bundle,
+    model_provenance_label,
+)
 
 
 DASHBOARD_ONLY = dashboard_only_enabled(os.environ)
 API_URL = resolve_api_url(os.environ, DASHBOARD_ONLY)
+OFFLINE_RESULTS = load_results_bundle() if DASHBOARD_ONLY else None
 NAV_ITEMS = [
     "Overview",
     "Model Details",
@@ -396,6 +402,124 @@ def _latest_events(history: list[dict], key: str, count: int = 4) -> list[dict]:
     return sorted(history, key=lambda item: str(item.get("timestamp", "")), reverse=True)[:count]
 
 
+def _render_historical_evaluation() -> None:
+    st.markdown("#### Historical/offline validation results")
+    if not OFFLINE_RESULTS:
+        st.info(empty_state_message("evaluation"))
+        return
+    evaluation = OFFLINE_RESULTS["evaluation"]
+    models = evaluation.get("models", [])
+    if not models:
+        st.info("No verified model evaluation records are available.")
+        return
+    rows = []
+    for model in models:
+        rows.append({
+            "Model": model.get("model_type", "Unknown"),
+            "Version": f"v{model['version']}" if model.get("version") is not None else "Experiment run",
+            "Split": model.get("split", "unknown").title(),
+            "Samples": model.get("sample_count"),
+            "ROC-AUC": model.get("metrics", {}).get("roc_auc"),
+            "PR-AUC": model.get("metrics", {}).get("pr_auc"),
+            "Macro F1": model.get("metrics", {}).get("macro_f1"),
+            "Accuracy": model.get("metrics", {}).get("accuracy"),
+        })
+    frame = pd.DataFrame(rows).set_index("Model")
+    st.caption(
+        "Historical registry snapshot; values describe the recorded validation split, "
+        "not the current live Render model."
+    )
+    st.bar_chart(frame[["ROC-AUC", "PR-AUC", "Macro F1", "Accuracy"]], height=260)
+    st.dataframe(frame.reset_index(), width="stretch", hide_index=True)
+    for model in models:
+        st.caption(model_provenance_label(model))
+        st.caption(
+            "Project dataset manifest fingerprint (not a per-run MLflow input link): "
+            f"{model.get('provenance', {}).get('dataset_fingerprint', 'unavailable')}"
+        )
+
+
+def _render_historical_drift(*, summary_only: bool = False) -> None:
+    st.markdown("#### Historical/offline drift results")
+    if not OFFLINE_RESULTS:
+        st.info(empty_state_message("drift"))
+        return
+    drift = OFFLINE_RESULTS.get("drift", {})
+    scenarios = drift.get("scenarios", [])
+    if not scenarios:
+        st.info("No verified historical drift runs are available.")
+        return
+    rows = [{
+        "Scenario": scenario.get("label", "Historical run"),
+        "Batch": scenario.get("batch_label"),
+        "Timestamp": _format_time(scenario.get("timestamp")),
+        "Rows": scenario.get("current_sample_count"),
+        "Drifted features": f"{len(scenario.get('drifted_features', []))} / {len(scenario.get('feature_drift_scores', {}))}",
+        "Drift detected": "Yes" if scenario.get("dataset_drift") else "No",
+        "Threshold": f"{float(scenario.get('drift_threshold', 0)):.0%}",
+    } for scenario in scenarios]
+    st.caption(drift.get("notice", "Historical monitoring data; not live Render monitoring."))
+    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    if summary_only:
+        return
+    shifted = next((item for item in scenarios if item.get("dataset_drift")), None)
+    if shifted:
+        st.caption(
+            f"Shifted verification batch hash {shifted.get('batch_hash')} · "
+            f"{shifted.get('current_sample_count')} current rows vs "
+            f"{shifted.get('reference_sample_count')} reference rows · "
+            f"threshold {float(shifted.get('drift_threshold', 0)):.0%}."
+        )
+        st.markdown("##### Feature drift scores · shifted verification batch")
+        scores = shifted.get("feature_drift_scores", {})
+        drifted_features = set(shifted.get("drifted_features", []))
+        if scores:
+            score_frame = pd.DataFrame([
+                {"Feature": feature, "Evidently score": score,
+                 "Flagged": "Yes" if feature in drifted_features else "No"}
+                for feature, score in scores.items()
+            ]).sort_values("Evidently score", ascending=False)
+            st.caption("Recorded Evidently feature drift scores; they are not prediction probabilities.")
+            st.bar_chart(score_frame.set_index("Feature")[["Evidently score"]], height=330)
+            st.dataframe(score_frame, width="stretch", hide_index=True)
+        st.caption(f"Source record: {drift.get('source', 'offline results bundle')}.")
+
+
+def _render_historical_retraining() -> None:
+    st.markdown("#### Historical/offline retraining audit")
+    if not OFFLINE_RESULTS:
+        st.info(empty_state_message("retraining"))
+        return
+    retraining = OFFLINE_RESULTS.get("retraining", {})
+    events = retraining.get("events", [])
+    st.caption(retraining.get("notice", "Historical audit data; retraining is not running on Render."))
+    if not events:
+        st.info("No champion/challenger or skipped retraining records are present in the offline bundle.")
+        return
+    table = pd.DataFrame([{
+        "Timestamp": _format_time(event.get("timestamp")),
+        "Decision": str(event.get("decision", "unknown")).replace("_", " ").title(),
+        "Champion version": event.get("champion_version"),
+        "Retained version": event.get("retained_champion_version"),
+        "Champion validation ROC-AUC": event.get("champion_validation_roc_auc"),
+        "Challenger validation ROC-AUC": event.get("challenger_validation_roc_auc"),
+        "Challenger run": event.get("challenger_run_id"),
+    } for event in events])
+    st.dataframe(table, width="stretch", hide_index=True)
+    paired = [event for event in events if
+              event.get("champion_validation_roc_auc") is not None and
+              event.get("challenger_validation_roc_auc") is not None]
+    if paired:
+        chart = pd.DataFrame([{
+            "Event": f"{_format_time(event.get('timestamp'))} · v{event.get('champion_version', '?')} → challenger",
+            "Champion ROC-AUC (audit)": event["champion_validation_roc_auc"],
+            "Challenger ROC-AUC (audit)": event["challenger_validation_roc_auc"],
+        } for event in paired]).set_index("Event")
+        st.caption(retraining.get("comparison_metric_label", "Validation scores as recorded in the audit log."))
+        st.bar_chart(chart, height=260)
+    st.caption(f"Source record: {retraining.get('source', 'offline results bundle')}.")
+
+
 def _categorical_values() -> dict[str, list[str]]:
     try:
         frame = pd.read_csv(RAW_DATA_FILE, sep=DATA_SEPARATOR, usecols=CATEGORICAL_FEATURES)
@@ -430,6 +554,8 @@ current_test = test_map.get(champion_version, {"metrics": {}, "source": None})
 
 if DASHBOARD_ONLY:
     st.info(DASHBOARD_ONLY_MESSAGE)
+    if OFFLINE_RESULTS:
+        st.caption(OFFLINE_RESULTS.get("notice", "Historical/offline results are shown separately from live service status."))
 
 
 if page == "Overview":
@@ -439,7 +565,7 @@ if page == "Overview":
         if DASHBOARD_ONLY else "Current champion, evaluation results and live service status.",
     )
     if DASHBOARD_ONLY:
-        st.caption("Model details and evaluation metrics require live MLflow registry access and are not queried here.")
+        st.caption("No live MLflow query is made. Historical evaluation results below have explicit run provenance and do not describe a current live model.")
     elif not registry.get("ok"):
         st.error(f"MLflow registry unavailable: {registry.get('error', 'connection failed')}")
     elif not champion:
@@ -498,6 +624,11 @@ if page == "Overview":
             st.caption("PREDICTION LOGGING")
             _badge("Local file only" if DASHBOARD_ONLY else "Writing" if logger_ok else "Unavailable", "neutral" if DASHBOARD_ONLY else "healthy" if logger_ok else "warning")
             st.caption(f"{len(predictions)} locally available prediction records" if DASHBOARD_ONLY and not predictions.empty else "No local prediction records are available." if DASHBOARD_ONLY else f"{api_metrics.get('predictions_logged_file', 0)} persisted predictions")
+
+    if DASHBOARD_ONLY:
+        _render_historical_evaluation()
+        _render_historical_drift(summary_only=True)
+        _render_historical_retraining()
 
     st.markdown("#### Recent activity")
     left, right = st.columns(2)
@@ -559,7 +690,13 @@ if page == "Overview":
 elif page == "Model Details":
     _page_header("Model details", "Registry lineage, active-run metrics and version comparisons.")
     if DASHBOARD_ONLY:
-        st.info("Model details, versions, and MLflow metrics are unavailable because live registry access is disabled in this deployment.")
+        st.info("Live registry access is disabled. The following is a historical/offline evaluation snapshot, not the current Render model.")
+        _render_historical_evaluation()
+        if OFFLINE_RESULTS:
+            st.json({
+                "dataset": OFFLINE_RESULTS.get("dataset"),
+                "registry_snapshot_source": OFFLINE_RESULTS.get("evaluation", {}).get("source"),
+            })
     elif not registry.get("ok"):
         st.error(f"Cannot query MLflow: {registry.get('error', 'connection failed')}")
     elif not champion:
@@ -594,7 +731,7 @@ elif page == "Model Details":
 
     st.markdown("#### Registered version history")
     if DASHBOARD_ONLY:
-        st.caption("No registry version history is loaded in dashboard-only mode.")
+        st.caption("No live registry version history is loaded in dashboard-only mode.")
     elif versions:
         table = _version_table(versions, test_map)
         st.dataframe(table, width="stretch", hide_index=True)
@@ -608,7 +745,10 @@ elif page == "Model Details":
 
 elif page == "Monitoring & Drift":
     _page_header("Monitoring & drift", "Reference-to-current distribution checks and retraining trigger status.")
-    if not monitoring:
+    if DASHBOARD_ONLY:
+        st.info("Live monitoring is not running on Render. The following historical checks are offline and include a shifted verification batch.")
+        _render_historical_drift()
+    elif not monitoring:
         st.info(
             "No monitoring history file is available in this dashboard-only deployment."
             if DASHBOARD_ONLY else "No monitoring events are recorded yet. Run the monitoring script or pipeline against a batch."
@@ -679,7 +819,10 @@ elif page == "Monitoring & Drift":
 
 elif page == "Retraining History":
     _page_header("Retraining history", "Candidate evaluations, promotion decisions and their comparison protocol.")
-    if not retraining:
+    if DASHBOARD_ONLY:
+        st.info("Retraining is not running on Render. Historical audit records are shown below.")
+        _render_historical_retraining()
+    elif not retraining:
         st.info(
             "No retraining history file is available in this dashboard-only deployment."
             if DASHBOARD_ONLY else "No retraining decisions have been recorded. Monitoring by itself does not start retraining."

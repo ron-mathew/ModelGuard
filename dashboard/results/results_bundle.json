@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "status": "historical_offline",
+  "notice": "Historical results from repository artifacts. They do not identify the current live Render model and do not indicate that API, monitoring, or retraining services are running.",
+  "dataset": {
+    "name": "UCI Bank Marketing",
+    "fingerprint": "7ced3ff9c30ec57c3644572b59f5e4214dc550caf95f332eb812cf53c5b42077",
+    "rows": 45211,
+    "split_sizes": {
+      "train": 31647,
+      "val": 6782,
+      "test": 6782
+    },
+    "source": "artifacts/data_manifest.json",
+    "run_linkage_note": "The MLflow runs do not record an input dataset digest. This fingerprint identifies the project data manifest and accompanies the reported split size; it is not asserted as a run-level MLflow dataset link."
+  },
+  "evaluation": {
+    "title": "Baseline validation comparison",
+    "split": "validation",
+    "sample_count": 6782,
+    "models": [
+      {
+        "model_type": "Logistic Regression",
+        "version": null,
+        "run_id": "178c8bed1db843e2961ceea2cc18cc69",
+        "run_started_at": "2026-10-26T12:18:54.612000+00:00",
+        "split": "validation",
+        "sample_count": 6782,
+        "metrics": {
+          "roc_auc": 0.7719753975184013,
+          "pr_auc": 0.4094252023405045,
+          "macro_f1": 0.613321231056084,
+          "accuracy": 0.7556767915069301
+        },
+        "provenance": {
+          "registry": "host-side MLflow SQLite registry snapshot",
+          "experiment": "modelguard-bank-marketing",
+          "run_id": "178c8bed1db843e2961ceea2cc18cc69",
+          "metrics_source": "latest_metrics keys val_roc_auc, val_pr_auc, val_f1_macro, val_accuracy",
+          "registry_version": null,
+          "alias": null,
+          "dataset_fingerprint": "7ced3ff9c30ec57c3644572b59f5e4214dc550caf95f332eb812cf53c5b42077",
+          "split_sizes_source": "artifacts/data_manifest.json"
+        }
+      },
+      {
+        "model_type": "Random Forest",
+        "version": 4,
+        "run_id": "f62b0cdaec164179a1cc1d7a7cd4c1bb",
+        "run_started_at": "2026-10-26T12:19:40.562000+00:00",
+        "split": "validation",
+        "sample_count": 6782,
+        "metrics": {
+          "roc_auc": 0.7931630435537873,
+          "pr_auc": 0.4343011158071681,
+          "macro_f1": 0.6596573920939132,
+          "accuracy": 0.8174579769979358
+        },
+        "provenance": {
+          "registry": "host-side MLflow SQLite registry snapshot",
+          "experiment": "modelguard-bank-marketing",
+          "run_id": "f62b0cdaec164179a1cc1d7a7cd4c1bb",
+          "metrics_source": "latest_metrics keys val_roc_auc, val_pr_auc, val_f1_macro, val_accuracy",
+          "registry_version": 4,
+          "alias": "champion",
+          "dataset_fingerprint": "7ced3ff9c30ec57c3644572b59f5e4214dc550caf95f332eb812cf53c5b42077",
+          "split_sizes_source": "artifacts/data_manifest.json"
+        }
+      }
+    ],
+    "source": "mlruns/mlflow.db, joined to registered model version and artifacts/data_manifest.json"
+  },
+  "drift": {
+    "title": "Historical Evidently verification runs",
+    "notice": "Historical verification checks only; not live Render monitoring. The shifted result is recorded as verification_shifted_fixed; its original input CSV is not included in this bundle.",
+    "threshold_source": "threshold_used recorded in each Evidently result; project default is DRIFT_THRESHOLD=0.5.",
+    "scenarios": [
+      {
+        "label": "Normal verification batch",
+        "batch_label": "verification_normal_fixed",
+        "timestamp": "2026-10-25T14:33:44.715332+00:00",
+        "engine": "evidently",
+        "dataset_drift": false,
+        "drifted_features": [],
+        "feature_drift_scores": {
+          "age": 0.03933269904688187,
+          "balance": 0.036518916657660216,
+          "campaign": 0.05407201290515904,
+          "day": 0.05613543491477484,
+          "pdays": 0.026935945028876238,
+          "previous": 0.043345641862986256,
+          "contact": 0.011731656961674124,
+          "default": 0.009023148773725344,
+          "education": 0.020342937573049395,
+          "housing": 0.008860981197285386,
+          "job": 0.029387086705194698,
+          "loan": 0.027913427409103346,
+          "marital": 0.009808694920359374,
+          "month": 0.030109102681594318,
+          "poutcome": 0.009252030866280448
+        },
+        "drift_fraction": 0.0,
+        "drift_threshold": 0.5,
+        "current_sample_count": 1200,
+        "reference_sample_count": 31647,
+        "batch_hash": "20538e91ac5ae557"
+      },
+      {
+        "label": "Shifted verification batch (historical)",
+        "batch_label": "verification_shifted_fixed",
+        "timestamp": "2026-10-25T14:33:46.211304+00:00",
+        "engine": "evidently",
+        "dataset_drift": true,
+        "drifted_features": [
+          "age",
+          "balance",
+          "campaign",
+          "day",
+          "pdays",
+          "previous",
+          "education",
+          "job"
+        ],
+        "feature_drift_scores": {
+          "age": 2.317931624806762,
+          "balance": 1.6478330842791558,
+          "campaign": 2.586619192843873,
+          "day": 1.7854823300613234,
+          "pdays": 0.41738440912060026,
+          "previous": 5.21853546049932,
+          "contact": 0.011731656961674124,
+          "default": 0.009023148773725344,
+          "education": 0.8325546111576978,
+          "housing": 0.008860981197285386,
+          "job": 0.8325546111576977,
+          "loan": 0.027913427409103346,
+          "marital": 0.009808694920359374,
+          "month": 0.030109102681594318,
+          "poutcome": 0.009252030866280448
+        },
+        "drift_fraction": 0.5333333333333333,
+        "drift_threshold": 0.5,
+        "current_sample_count": 1200,
+        "reference_sample_count": 31647,
+        "batch_hash": "49563a063bee3299"
+      }
+    ],
+    "source": "reports/drift/monitoring_verification_*_fixed_*.json; labels and batch hashes cross-checked with reports/monitoring/monitoring_log.jsonl"
+  },
+  "retraining": {
+    "title": "Historical retraining audit",
+    "notice": "Audit-recorded outcomes; no retraining process is running on Render.",
+    "comparison_metric_label": "Validation ROC-AUC as recorded in the retraining audit. Audit protocol is not recorded in these historical entries.",
+    "events": [
+      {
+        "timestamp": "2026-10-25T14:28:40.155517+00:00",
+        "decision": "rejected",
+        "model_type": "random_forest",
+        "champion_version": 3,
+        "retained_champion_version": 3,
+        "challenger_run_id": "6f63d7c075c841779129804f310f1759",
+        "batch_rows": null,
+        "training_rows": 22152,
+        "champion_validation_roc_auc": 0.8347788150746165,
+        "challenger_validation_roc_auc": 0.7828560191871261,
+        "improvement_threshold": 0.0,
+        "comparison_reason": "Challenger ROC-AUC (0.7829) does not exceed champion ROC-AUC (0.8348) + improvement threshold (0.0000). Rejected.",
+        "audit_protocol": "not recorded"
+      },
+      {
+        "timestamp": "2026-10-25T14:38:08.861631+00:00",
+        "decision": "skipped",
+        "model_type": "random_forest",
+        "champion_version": null,
+        "retained_champion_version": null,
+        "challenger_run_id": null,
+        "batch_rows": 1200,
+        "training_rows": null,
+        "champion_validation_roc_auc": null,
+        "challenger_validation_roc_auc": null,
+        "improvement_threshold": null,
+        "comparison_reason": "Retraining skipped because the trigger batch did not pass the drift check.",
+        "audit_protocol": "not recorded"
+      },
+      {
+        "timestamp": "2026-10-25T14:40:05.110916+00:00",
+        "decision": "rejected",
+        "model_type": "random_forest",
+        "champion_version": 3,
+        "retained_champion_version": 3,
+        "challenger_run_id": "a676455f6db8492fa0b3504284165afe",
+        "batch_rows": 1200,
+        "training_rows": 22992,
+        "champion_validation_roc_auc": 0.8428933163512858,
+        "challenger_validation_roc_auc": 0.792829992785822,
+        "improvement_threshold": 0.0,
+        "comparison_reason": "Challenger ROC-AUC (0.7928) does not exceed champion ROC-AUC (0.8429) + improvement threshold (0.0000). Rejected.",
+        "audit_protocol": "not recorded"
+      }
+    ],
+    "source": "reports/monitoring/retraining_log.jsonl"
+  }
+}
