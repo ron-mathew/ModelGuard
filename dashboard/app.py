@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from modelguard.config import (  # noqa: E402
     ARTIFACTS_DIR,
@@ -32,9 +33,17 @@ from modelguard.config import (  # noqa: E402
 from modelguard import registry as reg  # noqa: E402
 from modelguard.monitoring import load_monitoring_history  # noqa: E402
 from modelguard.retrain import load_retrain_history  # noqa: E402
+from runtime import (  # noqa: E402
+    DASHBOARD_ONLY_MESSAGE,
+    api_url as resolve_api_url,
+    dashboard_only_enabled,
+    registry_snapshot as apply_registry_mode,
+    service_snapshot as collect_service_snapshot,
+)
 
 
-API_URL = os.environ.get("MODEL_GUARD_API_URL", "http://localhost:5000").rstrip("/")
+DASHBOARD_ONLY = dashboard_only_enabled(os.environ)
+API_URL = resolve_api_url(os.environ, DASHBOARD_ONLY)
 NAV_ITEMS = [
     "Overview",
     "Model Details",
@@ -207,7 +216,7 @@ def _prediction_frame() -> pd.DataFrame:
     return frame
 
 
-def _registry_snapshot() -> dict:
+def _query_registry_snapshot() -> dict:
     try:
         import mlflow
         from mlflow import MlflowClient
@@ -242,11 +251,13 @@ def _registry_snapshot() -> dict:
         return {"ok": False, "versions": [], "champion": None, "error": str(exc)}
 
 
+def _load_registry_snapshot() -> dict:
+    """Query MLflow only in the normal full-stack deployment."""
+    return apply_registry_mode(DASHBOARD_ONLY, _query_registry_snapshot)
+
+
 def _service_snapshot() -> dict:
-    api_health = _json_request(f"{API_URL}/health")
-    api_model = _json_request(f"{API_URL}/model-info")
-    api_metrics = _json_request(f"{API_URL}/metrics")
-    return {"health": api_health, "model": api_model, "metrics": api_metrics}
+    return collect_service_snapshot(DASHBOARD_ONLY, API_URL, _json_request)
 
 
 def _matching_test_metrics(version: str, run_id: str, history: list[dict], run_metrics: dict) -> dict:
@@ -400,13 +411,13 @@ with st.sidebar:
     page = st.radio("Workspace", NAV_ITEMS, label_visibility="collapsed")
     st.markdown('<div class="mg-divider"></div>', unsafe_allow_html=True)
     st.caption("Registry")
-    st.code(MLFLOW_TRACKING_URI, language=None)
+    st.code("Disabled in this deployment" if DASHBOARD_ONLY else MLFLOW_TRACKING_URI, language=None)
     st.caption("Model")
     st.code(MLFLOW_MODEL_NAME, language=None)
     if st.button("Refresh data", width="stretch"):
         st.rerun()
 
-registry = _registry_snapshot()
+registry = _load_registry_snapshot()
 monitoring = _load_monitoring()
 retraining = _load_retraining()
 predictions = _prediction_frame()
@@ -417,10 +428,19 @@ champion_version = str(registry.get("champion_version", ""))
 test_map = _version_test_map(versions, retraining)
 current_test = test_map.get(champion_version, {"metrics": {}, "source": None})
 
+if DASHBOARD_ONLY:
+    st.info(DASHBOARD_ONLY_MESSAGE)
+
 
 if page == "Overview":
-    _page_header("Overview", "Current champion, evaluation results and live service status.")
-    if not registry.get("ok"):
+    _page_header(
+        "Overview",
+        "Packaged model information and available local activity."
+        if DASHBOARD_ONLY else "Current champion, evaluation results and live service status.",
+    )
+    if DASHBOARD_ONLY:
+        st.caption("Model details and evaluation metrics require live MLflow registry access and are not queried here.")
+    elif not registry.get("ok"):
         st.error(f"MLflow registry unavailable: {registry.get('error', 'connection failed')}")
     elif not champion:
         st.warning(registry.get("error", "No champion is registered."))
@@ -459,25 +479,25 @@ if page == "Overview":
 
     st.markdown("#### Service status")
     api_label, api_detail = _status_text(services["health"])
-    mlflow_label = "Connected" if registry.get("ok") else "Unavailable"
+    mlflow_label = "Disabled" if DASHBOARD_ONLY else "Connected" if registry.get("ok") else "Unavailable"
     api_metrics = services["metrics"].get("data", {}) if services["metrics"].get("ok") else {}
     logger_ok = services["metrics"].get("ok") and "predictions_logged_file" in api_metrics
     status_cols = st.columns(3)
     with status_cols[0]:
         with st.container(border=True):
             st.caption("PREDICTION API")
-            _badge(api_label, "healthy" if api_label == "Healthy" else "warning")
-            st.caption(f"{API_URL} · served v{api_detail or '—'}")
+            _badge("Disabled" if DASHBOARD_ONLY else api_label, "neutral" if DASHBOARD_ONLY else "healthy" if api_label == "Healthy" else "warning")
+            st.caption("Live predictions are disabled." if DASHBOARD_ONLY else f"{API_URL} · served v{api_detail or '—'}")
     with status_cols[1]:
         with st.container(border=True):
             st.caption("MLFLOW TRACKING / REGISTRY")
-            _badge(mlflow_label, "healthy" if registry.get("ok") else "warning")
-            st.caption("Live tracking-store query")
+            _badge(mlflow_label, "neutral" if DASHBOARD_ONLY else "healthy" if registry.get("ok") else "warning")
+            st.caption("Live registry access is disabled." if DASHBOARD_ONLY else "Live tracking-store query")
     with status_cols[2]:
         with st.container(border=True):
             st.caption("PREDICTION LOGGING")
-            _badge("Writing" if logger_ok else "Unavailable", "healthy" if logger_ok else "warning")
-            st.caption(f"{api_metrics.get('predictions_logged_file', 0)} persisted predictions")
+            _badge("Local file only" if DASHBOARD_ONLY else "Writing" if logger_ok else "Unavailable", "neutral" if DASHBOARD_ONLY else "healthy" if logger_ok else "warning")
+            st.caption(f"{len(predictions)} locally available prediction records" if DASHBOARD_ONLY and not predictions.empty else "No local prediction records are available." if DASHBOARD_ONLY else f"{api_metrics.get('predictions_logged_file', 0)} persisted predictions")
 
     st.markdown("#### Recent activity")
     left, right = st.columns(2)
@@ -494,7 +514,10 @@ if page == "Overview":
                     "drift" if drift else "healthy",
                 )
         else:
-            st.caption("No monitoring events have been recorded.")
+            st.caption(
+                "No monitoring log is available; monitoring events are not generated by this dashboard-only deployment."
+                if DASHBOARD_ONLY else "No monitoring events have been recorded."
+            )
     with right:
         st.markdown("**Retraining decisions**")
         if retraining:
@@ -509,7 +532,10 @@ if page == "Overview":
                     tone,
                 )
         else:
-            st.caption("No retraining decisions have been recorded.")
+            st.caption(
+                "No retraining history file is available in this dashboard-only deployment."
+                if DASHBOARD_ONLY else "No retraining decisions have been recorded."
+            )
 
     valid_points = []
     for event in sorted(retraining, key=lambda item: str(item.get("timestamp", ""))):
@@ -532,7 +558,9 @@ if page == "Overview":
 
 elif page == "Model Details":
     _page_header("Model details", "Registry lineage, active-run metrics and version comparisons.")
-    if not registry.get("ok"):
+    if DASHBOARD_ONLY:
+        st.info("Model details, versions, and MLflow metrics are unavailable because live registry access is disabled in this deployment.")
+    elif not registry.get("ok"):
         st.error(f"Cannot query MLflow: {registry.get('error', 'connection failed')}")
     elif not champion:
         st.info("No champion alias is currently assigned in the configured registry.")
@@ -565,7 +593,9 @@ elif page == "Model Details":
             })
 
     st.markdown("#### Registered version history")
-    if versions:
+    if DASHBOARD_ONLY:
+        st.caption("No registry version history is loaded in dashboard-only mode.")
+    elif versions:
         table = _version_table(versions, test_map)
         st.dataframe(table, width="stretch", hide_index=True)
         selected = st.selectbox("Inspect version", [str(row.get("version")) for row in sorted(versions, key=lambda item: int(item.get("version", 0)), reverse=True)])
@@ -579,7 +609,10 @@ elif page == "Model Details":
 elif page == "Monitoring & Drift":
     _page_header("Monitoring & drift", "Reference-to-current distribution checks and retraining trigger status.")
     if not monitoring:
-        st.info("No monitoring events are recorded yet. Run the monitoring script or pipeline against a batch.")
+        st.info(
+            "No monitoring history file is available in this dashboard-only deployment."
+            if DASHBOARD_ONLY else "No monitoring events are recorded yet. Run the monitoring script or pipeline against a batch."
+        )
     else:
         latest = max(monitoring, key=lambda item: str(item.get("timestamp", "")))
         report = latest.get("report_data", {})
@@ -647,7 +680,10 @@ elif page == "Monitoring & Drift":
 elif page == "Retraining History":
     _page_header("Retraining history", "Candidate evaluations, promotion decisions and their comparison protocol.")
     if not retraining:
-        st.info("No retraining decisions have been recorded. Monitoring by itself does not start retraining.")
+        st.info(
+            "No retraining history file is available in this dashboard-only deployment."
+            if DASHBOARD_ONLY else "No retraining decisions have been recorded. Monitoring by itself does not start retraining."
+        )
     else:
         def _decision(event: dict) -> str:
             return str(event.get("decision", event.get("status", "unknown"))).lower()
@@ -691,17 +727,26 @@ elif page == "Retraining History":
 
 
 elif page == "Predictions":
-    _page_header("Predictions", "Recent API activity and an interactive request using the model input schema.")
+    _page_header(
+        "Predictions",
+        "Available local prediction records. Live prediction requests require the API service."
+        if DASHBOARD_ONLY else "Recent API activity and an interactive request using the model input schema.",
+    )
     api_metrics = services["metrics"].get("data", {}) if services["metrics"].get("ok") else {}
     api_health_label, _ = _status_text(services["health"])
-    if api_health_label != "Healthy":
+    if DASHBOARD_ONLY:
+        st.info("Live prediction API is disabled in dashboard-only mode.")
+    elif api_health_label != "Healthy":
         st.warning(f"Prediction API is {api_health_label.lower()}. Check the service card on Overview before submitting.")
     total = len(predictions)
     yes_count = int((pd.to_numeric(predictions.get("prediction", pd.Series(dtype=float)), errors="coerce") == 1).sum()) if total else 0
-    count_cols = st.columns(3)
-    count_cols[0].metric("Persisted requests", f"{total:,}")
-    count_cols[1].metric("Predicted yes", f"{yes_count:,}")
-    count_cols[2].metric("Predicted no", f"{total - yes_count:,}")
+    if not predictions.empty:
+        count_cols = st.columns(3)
+        count_cols[0].metric("Persisted requests", f"{total:,}")
+        count_cols[1].metric("Predicted yes", f"{yes_count:,}")
+        count_cols[2].metric("Predicted no", f"{total - yes_count:,}")
+    elif DASHBOARD_ONLY:
+        st.info("No prediction log is available in this deployment. Prediction counts are not inferred.")
     if not predictions.empty:
         st.markdown("#### Probability distribution")
         if "probability_yes" in predictions:
@@ -721,9 +766,14 @@ elif page == "Predictions":
             display["timestamp"] = display["timestamp"].dt.strftime("%Y-%m-%d %H:%M:%S UTC")
         st.dataframe(display.tail(50).iloc[::-1], width="stretch", hide_index=True)
     else:
-        st.caption("No prediction requests have been logged yet.")
+        st.caption(
+            "No local prediction log records are available."
+            if DASHBOARD_ONLY else "No prediction requests have been logged yet."
+        )
 
     st.markdown("#### Run a prediction")
+    if DASHBOARD_ONLY:
+        st.caption("Unavailable: live predictions require the Prediction API, which is not running in dashboard-only mode.")
     categories = _categorical_values()
     with st.form("modelguard_prediction_form", clear_on_submit=False):
         values: dict[str, object] = {}
@@ -740,8 +790,8 @@ elif page == "Predictions":
                     values[feature] = st.selectbox(feature.replace("_", " ").title(), choices, key=f"prediction_{feature}")
                 else:
                     values[feature] = st.text_input(feature.replace("_", " ").title(), key=f"prediction_{feature}")
-        submitted = st.form_submit_button("Predict", type="primary")
-    if submitted:
+        submitted = st.form_submit_button("Predict", type="primary", disabled=DASHBOARD_ONLY)
+    if submitted and not DASHBOARD_ONLY:
         missing = [feature for feature in FEATURE_COLUMNS if feature not in values or values[feature] is None]
         if missing:
             st.error(f"Missing input fields: {', '.join(missing)}")

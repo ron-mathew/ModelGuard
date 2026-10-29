@@ -125,6 +125,17 @@ Persistent MLflow data, model artifacts, API logs, and reports use named
 volumes. The API image expects a champion already registered in that shared
 MLflow store.
 
+### Render dashboard-only deployment
+
+`Dockerfile.render` runs only Streamlit on port 8501 to fit the free-tier memory
+limit. Set `MODEL_GUARD_DASHBOARD_ONLY=true` for this deployment. In this mode
+the dashboard does not query the Prediction API or MLflow registry and does
+not submit predictions. It can display genuine prediction, monitoring, and
+retraining records only when their files are present in the container; otherwise
+it shows an unavailable or empty state. Do not set the API or MLflow service
+URLs to localhost in this mode. The normal Docker Compose stack leaves this
+setting unset and continues to use its configured `api` and `mlflow` endpoints.
+
 Kubernetes examples are in `k8s/`. They require a working cluster, persistent
 volume support, and a locally available `modelguard:latest` image. The manifests
 have not been deployed in this environment.
